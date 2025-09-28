@@ -1260,7 +1260,7 @@ get_model() {
             if [[ $(kextstat | grep -F -e "FakeSMC" -e "VirtualSMC") != "" ]]; then
                 model="Hackintosh (SMBIOS: $(sysctl -n hw.model))"
             else
-                model=$(sysctl -n hw.model)
+                model=$(system_profiler SPHardwareDataType | \grep "Machine Model" | sed "s/.*: //")
             fi
         ;;
 
@@ -1708,7 +1708,7 @@ get_packages() {
         unset packages
 
     elif [[ $package_managers == on ]]; then
-        printf -v packages '%s, ' "${managers[@]}"
+        packages=$(printf '%s, ' "${managers[@]}")
         packages=${packages%,*}
 
     elif [[ $package_managers == tiny ]]; then
@@ -1985,13 +1985,21 @@ get_wm() {
     else
         case $os in
             "Mac OS X"|"macOS")
-                ps_line=$(ps -e | grep -o \
-                    -e "[S]pectacle" \
-                    -e "[A]methyst" \
-                    -e "[k]wm" \
-                    -e "[c]hun[k]wm" \
-                    -e "[y]abai" \
-                    -e "[R]ectangle")
+                # ps_line=$(ps -e | grep -o \
+                #     -e "[S]pectacle" \
+                #     -e "[A]methyst" \
+                #     -e "[k]wm" \
+                #     -e "[c]hun[k]wm" \
+                #     -e "[y]abai" \
+                #     -e "[R]ectangle")
+                ps -e | while read line ; do
+                    case "$line" in
+                        *Spectacle*|*Amethyst*|*kwm*|*chunkwm*|*yabai*|*Rectangle*)
+                            ps_line="$line"
+                            break
+                            ;;
+                    esac
+                done
 
                 case $ps_line in
                     *chunkwm*)   wm=chunkwm ;;
@@ -2165,8 +2173,8 @@ get_wm_theme() {
 
         "Quartz Compositor")
             global_preferences=$HOME/Library/Preferences/.GlobalPreferences.plist
-            wm_theme=$(PlistBuddy -c "Print AppleInterfaceStyle" "$global_preferences")
-            wm_theme_color=$(PlistBuddy -c "Print AppleAccentColor" "$global_preferences")
+            wm_theme=$(has PlistBuddy && PlistBuddy -c "Print AppleInterfaceStyle" "$global_preferences")
+            wm_theme_color=$(has PlistBuddy && PlistBuddy -c "Print AppleAccentColor" "$global_preferences")
 
             [[ "$wm_theme" ]] ||
                 wm_theme=Light
@@ -2306,12 +2314,13 @@ get_cpu() {
         ;;
 
         "Mac OS X"|"macOS")
-            cpu="$(sysctl -n machdep.cpu.brand_string)"
+            # cpu="$(sysctl -n machdep.cpu.brand_string)"
+            cpu=$(system_profiler SPHardwareDataType | \grep "CPU Type: " | sed "s/.* CPU Type: //")
 
             # Get CPU cores.
             case $cpu_cores in
-                "logical" | "on") cores="$(sysctl -n hw.logicalcpu_max)" ;;
-                "physical")       cores="$(sysctl -n hw.physicalcpu_max)" ;;
+                "logical" | "on") cores="$(sysctl -n hw.ncpu)" ;;
+                "physical")       cores="$(sysctl -n hw.ncpu)" ;;
             esac
         ;;
 
@@ -2615,8 +2624,10 @@ get_gpu() {
                 source "${cache_dir}/neofetch/gpu"
 
             else
-                gpu="$(system_profiler SPDisplaysDataType |\
-                       awk -F': ' '/^\ *Chipset Model:/ {printf $2 ", "}')"
+                # gpu="$(system_profiler SPDisplaysDataType |\
+                #        awk -F': ' '/^\ *Chipset Model:/ {printf $2 ", "}')"
+                #glorious hardcoding
+                gpu=$(system_profiler SPPCIDataType | grep , | sed "s/.*ATY/ATI/" | sed "s/[,:]/ /g")
                 gpu="${gpu//\/ \$}"
                 gpu="${gpu%,*}"
 
@@ -2902,7 +2913,7 @@ get_song() {
         "yarock"
     )
 
-    printf -v players "|%s" "${players[@]}"
+    players=$(printf "|%s" "${players[@]}")
     player="$(ps aux | awk -v pattern="(${players:1})" \
         '!/ awk / && !/iTunesHelper/ && match($0,pattern){print substr($0,RSTART,RLENGTH); exit}')"
 
@@ -3993,29 +4004,29 @@ get_cols() {
 
     if [[ "$color_blocks" == "on" ]]; then
         # Convert the width to space chars.
-        printf -v block_width "%${block_width}s"
+        block_width=$(printf "%${block_width}s")
 
         # Generate the string.
         for ((block_range[0]; block_range[0]<=block_range[1]; block_range[0]++)); do
             case ${block_range[0]} in
                 [0-7])
-                    printf -v blocks  '%b\e[3%bm\e[4%bm%b' \
-                        "$blocks" "${block_range[0]}" "${block_range[0]}" "$block_width"
+                    blocks=$(printf '%b\e[3%bm\e[4%bm%b' \
+                        "$blocks" "${block_range[0]}" "${block_range[0]}" "$block_width")
                 ;;
 
                 *)
-                    printf -v blocks2 '%b\e[38;5;%bm\e[48;5;%bm%b' \
-                        "$blocks2" "${block_range[0]}" "${block_range[0]}" "$block_width"
+                    blocks2=$(printf '%b\e[38;5;%bm\e[48;5;%bm%b' \
+                        "$blocks2" "${block_range[0]}" "${block_range[0]}" "$block_width")
                 ;;
             esac
         done
 
         # Convert height into spaces.
-        printf -v block_spaces "%${block_height}s"
+        block_spaces=$(printf "%${block_height}s")
 
         # Convert the spaces into rows of blocks.
-        [[ "$blocks"  ]] && cols+="${block_spaces// /${blocks}[mnl}"
-        [[ "$blocks2" ]] && cols+="${block_spaces// /${blocks2}[mnl}"
+        [[ "$blocks"  ]] && cols="$cols${block_spaces// /${blocks}[mnl}"
+        [[ "$blocks2" ]] && cols="$cols${block_spaces// /${blocks2}[mnl}"
 
         # Add newlines to the string.
         cols=${cols%%nl}
@@ -4545,11 +4556,11 @@ display_image() {
         ;;
 
         "iterm2")
-            printf -v iterm_cmd '\e]1337;File=width=%spx;height=%spx;inline=1:%s' \
-                "$width" "$height" "$(base64 < "$image")"
+            iterm_cmd=$(printf '\e]1337;File=width=%spx;height=%spx;inline=1:%s' \
+                "$width" "$height" "$(base64 < "$image")")
 
             # Tmux requires an additional escape sequence for this to work.
-            [[ -n "$TMUX" ]] && printf -v iterm_cmd '\ePtmux;\e%b\e'\\ "$iterm_cmd"
+            [[ -n "$TMUX" ]] && iterm_cmd=$(printf '\ePtmux;\e%b\e'\\ "$iterm_cmd")
 
             printf '%b\a\n' "$iterm_cmd"
         ;;
@@ -4662,9 +4673,23 @@ prin() {
 
 get_underline() {
     [[ "$underline_enabled" == "on" ]] && {
-        underline=$(printf \"%${length}s\");
-        printf '%b%b\n' "${text_padding:+\e[${text_padding}C}${zws}${underline_color}" \
-                        "${underline// /$underline_char}${reset} "
+        # underline=$(printf \"%${length}s\");
+        # printf '%b%b\n' "${text_padding:+\e[${text_padding}C}${zws}${underline_color}" \
+        #                 "${underline// /$underline_char}${reset} "
+        # Step 1: create underline string of spaces
+        underline=$(printf "%${length}s")
+
+        # Step 2: replace spaces with underline char (portable)
+        underline_filled=""
+        for ((i=-2;i<${#underline};i++)); do
+            underline_filled="${underline_filled}${underline_char}"
+        done
+
+        # Step 3: print with padding / color
+        printf '%b%b\n' \
+            "${text_padding:+\e[${text_padding}C}${zws}${underline_color}" \
+            "${underline_filled}${reset} "
+
     }
 
     ((++info_height))
@@ -4844,8 +4869,8 @@ bar() {
     elapsed="$(($1 * bar_length / $2))"
 
     # Create the bar with spaces.
-    printf -v prog  "%${elapsed}s"
-    printf -v total "%$((bar_length - elapsed))s"
+    prog=$(printf "%${elapsed}s")
+    total=$(printf "%$((bar_length - elapsed))s")
 
     # Set the colors and swap the spaces for $bar_char_.
     bar+="${bar_color_elapsed}${prog// /${bar_char_elapsed}}"
@@ -4930,7 +4955,7 @@ dynamic_prompt() {
     # If the ascii art is taller than the info.
     ((lines=lines>info_height?lines-info_height+1:1))
 
-    printf -v nlines "%${lines}s"
+    nlines=$(printf "%${lines}s")
     printf "%b" "${nlines// /\\n}"
 }
 
