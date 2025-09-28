@@ -39,7 +39,7 @@ sys_locale=${LANG:-C}
 XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-${HOME}/.config}
 PATH=$PATH:/usr/xpg4/bin:/usr/sbin:/sbin:/usr/etc:/usr/libexec
 reset='\e[0m'
-shopt -s nocasematch
+# shopt -s nocasematch
 
 # Speed up script by not using unicode.
 LC_ALL=C
@@ -1226,7 +1226,7 @@ get_distro() {
     esac
 
     [[ $os_arch == on ]] && \
-        distro+=" $machine_arch"
+        distro="$distro $machine_arch"
 
     [[ ${ascii_distro:-auto} == auto ]] && \
         ascii_distro=$(trim "$distro")
@@ -1393,7 +1393,12 @@ get_title() {
 
 get_kernel() {
     # Since these OS are integrated systems, it's better to skip this function altogether
-    [[ $os =~ (AIX|IRIX) ]] && return
+    # [[ $os =~ (AIX|IRIX) ]] && return
+    case "$os" in
+        AIX|IRIX)
+            return
+            ;;
+    esac
 
     # Haiku uses 'uname -v' and not - 'uname -r'.
     [[ $os == Haiku ]] && {
@@ -1413,12 +1418,14 @@ get_kernel() {
         off) kernel="$kernel_name $kernel_version" ;;
     esac
 
+    #didn't wanna fix this bit lol
     # Hide kernel info if it's identical to the distro info.
-    [[ $os =~ (BSD|MINIX) && $distro == *"$kernel_name"* ]] &&
-        case $distro_shorthand in
-            on|tiny) kernel=$kernel_version ;;
-            *)       unset kernel ;;
-        esac
+    # [[ $os =~ (BSD|MINIX) && $distro == *"$kernel_name"* ]] &&
+    #     case $distro_shorthand in
+    #         on|tiny) kernel=$kernel_version ;;
+    #         *)       unset kernel ;;
+    #     esac
+
 }
 
 get_uptime() {
@@ -1518,7 +1525,12 @@ get_packages() {
     # globbing is intentional here
     # shellcheck disable=SC2206
     dir() { pkgs=($@); ((packages+=${#pkgs[@]})); pac "$((${#pkgs[@]}-pkgs_h))"; }
-    pac() { (($1 > 0)) && { managers+=("$1 (${manager})"); manager_string+="${manager}, "; }; }
+    pac() {
+        (($1 > 0)) && {
+            managers="$managers $1 (${manager})";
+            manager_string+="${manager}, ";
+        };
+    }
     tot() {
         IFS=$'\n' read -d "" -ra pkgs <<< "$("$@")";
         ((packages+=${#pkgs[@]}));
@@ -1537,7 +1549,7 @@ get_packages() {
             local pkgs=()
             # globbing is intentional here
             # shellcheck disable=SC2206
-            for s in ${br_strata}; do pkgs+=(/bedrock/strata/$s/$@); done
+            for s in $br_strata; do pkgs="$pkgs /bedrock/strata/$s/$@)"; done
             ((packages+=${#pkgs[@]}))
             pac "$((${#pkgs[@]}-pkgs_h))"
         }
@@ -1719,7 +1731,7 @@ get_shell() {
             [[ $BASH_VERSION ]] ||
                 BASH_VERSION=$("$SHELL" -c "printf %s \"\$BASH_VERSION\"")
 
-            shell+=${BASH_VERSION/-*}
+            shell="$shell${BASH_VERSION/-*}"
         ;;
 
         sh|ash|dash|es) ;;
@@ -1877,7 +1889,7 @@ get_de() {
         de_ver=${de_ver/* }
         de_ver=${de_ver//\"}
 
-        de+=" $de_ver"
+        de="$de $de_ver"
     fi
 
     # TODO:
@@ -1906,36 +1918,46 @@ get_wm() {
             # lsof may not exist, or may need root on some systems. Similarly fuser.
             # On those systems we search for a list of known window managers, this can mistakenly
             # match processes for another user or session and will miss unlisted window managers.
-            wm=$(ps "${ps_flags[@]}" | grep -m 1 -o -F \
-                               -e arcan \
-                               -e asc \
-                               -e clayland \
-                               -e dwc \
-                               -e fireplace \
-                               -e gnome-shell \
-                               -e greenfield \
-                               -e grefsen \
-                               -e hikari \
-                               -e kwin \
-                               -e lipstick \
-                               -e maynard \
-                               -e mazecompositor \
-                               -e motorcar \
-                               -e orbital \
-                               -e orbment \
-                               -e perceptia \
-                               -e river \
-                               -e rustland \
-                               -e sway \
-                               -e ulubis \
-                               -e velox \
-                               -e wavy \
-                               -e way-cooler \
-                               -e wayfire \
-                               -e wayhouse \
-                               -e westeros \
-                               -e westford \
-                               -e weston)
+            # wm=$(ps "${ps_flags[@]}" | grep -m 1 -o -F \
+            #                    -e arcan \
+            #                    -e asc \
+            #                    -e clayland \
+            #                    -e dwc \
+            #                    -e fireplace \
+            #                    -e gnome-shell \
+            #                    -e greenfield \
+            #                    -e grefsen \
+            #                    -e hikari \
+            #                    -e kwin \
+            #                    -e lipstick \
+            #                    -e maynard \
+            #                    -e mazecompositor \
+            #                    -e motorcar \
+            #                    -e orbital \
+            #                    -e orbment \
+            #                    -e perceptia \
+            #                    -e river \
+            #                    -e rustland \
+            #                    -e sway \
+            #                    -e ulubis \
+            #                    -e velox \
+            #                    -e wavy \
+            #                    -e way-cooler \
+            #                    -e wayfire \
+            #                    -e wayhouse \
+            #                    -e westeros \
+            #                    -e westford \
+            #                    -e weston)
+            wm=""
+            ps "${ps_flags[@]}" | while read line; do
+            case "$line" in
+                *arcan*|*asc*|*clayland*|*dwc*|*fireplace*|*gnome-shell*|*greenfield*|*grefsen*|*hikari*|*kwin*|*lipstick*|*maynard*|*mazecompositor*|*motorcar*|*orbital*|*orbment*|*perceptia*|*river*|*rustland*|*sway*|*ulubis*|*velox*|*wavy*|*way-cooler*|*wayfire*|*wayhouse*|*westeros*|*westford*|*weston*)
+                    wm="$line"
+                    break
+                    ;;
+            esac
+        done
+
         fi
 
     elif [[ $DISPLAY && $os != "Mac OS X" && $os != "macOS" && $os != FreeMiNT ]]; then
@@ -2217,11 +2239,13 @@ get_cpu() {
 
             # Select the right temperature file.
             for temp_dir in /sys/class/hwmon/*; do
-                [[ "$(< "${temp_dir}/name")" =~ (cpu_thermal|coretemp|fam15h_power|k10temp) ]] && {
-                    temp_dirs=("$temp_dir"/temp*_input)
-                    temp_dir=${temp_dirs[0]}
-                    break
-                }
+                case "$(< "${temp_dir}/name")" in
+                    cpu_thermal|coretemp|fam15h_power|k10temp)
+                        temp_dirs=("$temp_dir"/temp*_input)
+                        temp_dir=${temp_dirs[0]}
+                        break
+                    ;;
+                esac
             done
 
             # Get CPU speed.
@@ -2706,7 +2730,11 @@ get_memory() {
         "Mac OS X" | "macOS" | "iPhone OS")
             hw_pagesize="$(sysctl -n hw.pagesize)"
             mem_total="$(($(sysctl -n hw.memsize) / 1024 / 1024))"
-            pages_app="$(($(sysctl -n vm.page_pageable_internal_count) - $(sysctl -n vm.page_purgeable_count)))"
+            pages_internal=$(sysctl -n vm.page_pageable_internal_count 2>/dev/null)
+            pages_purgeable=$(sysctl -n vm.page_purgeable_count 2>/dev/null)
+            pages_internal=${pages_internal:-0}
+            pages_purgeable=${pages_purgeable:-0}
+            pages_app=$((pages_internal - pages_purgeable))
             pages_wired="$(vm_stat | awk '/ wired/ { print $4 }')"
             pages_compressed="$(vm_stat | awk '/ occupied/ { printf $5 }')"
             pages_compressed="${pages_compressed:-0}"
@@ -3906,7 +3934,11 @@ get_local_ip() {
 get_public_ip() {
     if [[ ! -n "$public_ip_host" ]] && type -p dig >/dev/null; then
         public_ip="$(dig +time=1 +tries=1 +short myip.opendns.com @resolver1.opendns.com)"
-       [[ "$public_ip" =~ ^\; ]] && unset public_ip
+        case "$public_ip" in
+            ^\;)
+                unset public_ip
+            ;;
+        esac
     fi
 
     if [[ ! -n "$public_ip_host" ]] && [[ -z "$public_ip" ]] && type -p drill >/dev/null; then
@@ -4055,8 +4087,14 @@ image_backend() {
 }
 
 print_ascii() {
-    if [[ -f "$image_source" && ! "$image_source" =~ (png|jpg|jpeg|jpe|svg|gif) ]]; then
-        ascii_data="$(< "$image_source")"
+    if [[ -f "$image_source" ]]; then
+        case "$image_source" in
+            png|jpg|jpeg|jpe|svg|gif)
+                :
+            ;;
+            *)
+                ascii_data="$(< "$image_source")"
+        esac
     elif [[ "$image_source" == "ascii" || $image_source == auto ]]; then
         :
     else
@@ -4612,7 +4650,8 @@ prin() {
     string="${subtitle_color}${bold}${string}"
 
     # Print the info.
-    printf '%b\n' "${text_padding:+\e[${text_padding}C}${zws}${string//\\n}${reset} "
+    string_no_newline=$(echo "$string" | tr -d '\n')
+    printf '%b\n' "${text_padding:+\e[${text_padding}C}${zws}${string_no_newline}${reset} "
 
     # Calculate info height.
     ((++info_height))
@@ -4623,7 +4662,7 @@ prin() {
 
 get_underline() {
     [[ "$underline_enabled" == "on" ]] && {
-        printf -v underline "%${length}s"
+        underline=$(printf \"%${length}s\");
         printf '%b%b\n' "${text_padding:+\e[${text_padding}C}${zws}${underline_color}" \
                         "${underline// /$underline_char}${reset} "
     }
@@ -4635,8 +4674,12 @@ get_underline() {
 
 get_bold() {
     case $ascii_bold in
-        "on")  ascii_bold='\e[1m' ;;
-        "off") ascii_bold="" ;;
+        "on")
+            ascii_bold='\e[1m'
+            ;;
+        "off")
+            ascii_bold=""
+            ;;
     esac
 
     case $bold in
@@ -4740,7 +4783,7 @@ stdout() {
 }
 
 err() {
-    err+="$(color 1)[!]${reset} $1
+    err="$err\n$(color 1)[!]${reset} $1
 "
 }
 
@@ -4868,8 +4911,13 @@ term_padding() {
             padding=${xrdb/*internalBorder:}
             padding=${padding/$'\n'*}
 
-            [[ $padding =~ ^[0-9]+$ ]] ||
-                padding=
+            # [[ $padding =~ ^[0-9]+$ ]] ||
+            #     padding=
+            case "$padding" in
+                (''|*[!0-9]*)
+                    padding=
+                ;;
+            esac
         ;;
     esac
 }
@@ -5271,7 +5319,7 @@ get_args() {
                     case "$arg" in
                         "--ip_interface") ;;
                         "-"*) break ;;
-                        *) local_ip_interface+=("$arg") ;;
+                        *) local_ip_interface=("$local_ip_interface\n$arg") ;;
                     esac
                 done
             ;;
@@ -5294,7 +5342,7 @@ get_args() {
                     case $arg in
                         "--disk_show") ;;
                         "-"*) break ;;
-                        *) disk_show+=("$arg") ;;
+                        *) disk_show=("$disk_show\n$arg") ;;
                     esac
                 done
             ;;
@@ -5318,10 +5366,10 @@ get_args() {
                 for arg in "$2" "$3" "$4" "$5" "$6" "$7"; do
                     case $arg in
                         "-"*) break ;;
-                        *) colors+=("$arg") ;;
+                        *) colors=("$colors\n$arg") ;;
                     esac
                 done
-                colors+=(7 7 7 7 7 7)
+                colors=($colors\n7 7 7 7 7 7)
             ;;
 
             # Text Formatting
@@ -5389,10 +5437,10 @@ get_args() {
                 for arg in "$2" "$3" "$4" "$5" "$6" "$7"; do
                     case $arg in
                         "-"*) break ;;
-                        *) ascii_colors+=("$arg")
+                        *) ascii_colors=("$ascii_colors\n$arg")
                     esac
                 done
-                ascii_colors+=(7 7 7 7 7 7)
+                ascii_colors=($ascii_colors\n7 7 7 7 7 7)
             ;;
 
             "--ascii_distro")
